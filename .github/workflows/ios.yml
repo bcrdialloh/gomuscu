@@ -20,30 +20,43 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.44.8"
-          channel: "stable"
+          channel: stable
           cache: true
 
-      - name: Vérifier Flutter
+      - name: Vérifier l'environnement
         run: |
+          python --version
           flutter --version
-          flutter doctor -v
+          xcodebuild -version
 
       - name: Installer Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.86.4
 
-      - name: Vérifier Xcode
+      - name: Nettoyer les anciens builds
         run: |
-          xcodebuild -version
-          xcode-select -p
+          rm -rf build
+          rm -rf ios/Pods
+          rm -rf ios/.symlinks
+          rm -f ios/Podfile.lock
 
       - name: Construire GoMuscu
         run: |
           flet build ipa --no-rich-output
 
+      - name: Rechercher les fichiers générés
+        if: always()
+        run: |
+          echo "=== IPA ==="
+          find . -name "*.ipa" -print
+          echo "=== XCARCHIVE ==="
+          find . -name "*.xcarchive" -print
+
       - name: Récupérer l'IPA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: GoMuscu-iOS
           path: "**/*.ipa"
+          if-no-files-found: error

@@ -1,0 +1,20 @@
+[project]
+name = "gomuscu"
+version = "1.0.0"
+description = "GoMuscu"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "flet==0.86.4",
+    "requests"
+]
+
+[tool.flet]
+product = "GoMuscu"
+org = "com.gomuscu"
+bundle_id = "com.gomuscu.app"
+
+[tool.flet.ios]
+export_method = "debugging"
+
+[tool.flet.flutter.pubspec.dependencies]
+device_info_plus = "12.3.0"
