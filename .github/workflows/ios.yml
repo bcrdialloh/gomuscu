@@ -8,104 +8,69 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - name: Récupérer le projet
+      - name: Récupérer GoMuscu
         uses: actions/checkout@v4
 
-      - name: Installer Python
+      - name: Installer Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Installer Flutter
+      - name: Installer Flutter 3.44.8
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.44.8"
           channel: stable
           cache: true
 
-      - name: Vérifier Flutter et Xcode
-        run: |
-          flutter --version
-          flutter doctor -v
-          xcodebuild -version
-          xcode-select -p
-
-      - name: Installer Flet
+      - name: Installer Flet 0.86.4
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.86.4
+
+      - name: Vérifier environnement
+        run: |
+          echo "===== PYTHON ====="
+          python --version
+
+          echo "===== FLET ====="
           flet --version
 
-      # Flet génère le projet iOS ici
-      - name: Générer le projet iOS Flet
+          echo "===== FLUTTER ====="
+          flutter --version
+
+          echo "===== XCODE ====="
+          xcodebuild -version
+
+          echo "===== MACOS ====="
+          sw_vers
+
+      - name: Préparer Flutter iOS
         run: |
-          flet build ipa --no-rich-output
-        continue-on-error: true
+          flutter precache --ios
 
-      # Vérifier où Flet a généré le projet Flutter
-      - name: Rechercher pubspec.yaml
+      - name: Construire GoMuscu
         run: |
-          echo "=== PUBSPEC TROUVÉS ==="
-          find . -name "pubspec.yaml" -not -path "./.git/*" -print
+          flet build ipa \
+            --no-rich-output \
+            --yes \
+            --swift-package-manager \
+            --build-version 1.0.0 \
+            --build-number ${{ github.run_number }}
 
-      # Forcer device_info_plus 12.3.0
-      - name: Forcer device_info_plus 12.3.0
-        run: |
-          PUBSPEC=$(find . -path "*/ios/flutter/*/pubspec.yaml" -o -path "*/build/flutter/*/pubspec.yaml" | head -n 1)
-
-          if [ -z "$PUBSPEC" ]; then
-            echo "pubspec.yaml Flutter introuvable"
-            find . -name "pubspec.yaml" -not -path "./.git/*" -print
-            exit 1
-          fi
-
-          echo "Pubspec trouvé : $PUBSPEC"
-
-          python3 - "$PUBSPEC" <<'PY'
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          text = path.read_text()
-
-          if "dependency_overrides:" in text:
-              text += "\n  device_info_plus: 12.3.0\n"
-          else:
-              text += "\n\ndependency_overrides:\n  device_info_plus: 12.3.0\n"
-
-          path.write_text(text)
-          PY
-
-          echo "=== DEPENDENCY OVERRIDES ==="
-          tail -10 "$PUBSPEC"
-
-      - name: Installer les dépendances Flutter
-        run: |
-          cd ios
-          flutter pub get
-
-      - name: Nettoyer CocoaPods
-        run: |
-          cd ios
-          pod deintegrate || true
-          rm -rf Pods
-          rm -f Podfile.lock
-          pod install --repo-update
-
-      - name: Construire l'IPA
-        run: |
-          flet build ipa --no-rich-output
-
-      - name: Rechercher les fichiers générés
+      - name: Vérifier le résultat
         if: always()
         run: |
-          echo "=== IPA ==="
-          find . -name "*.ipa" -print
+          echo "===== IPA ====="
+          find . -type f -name "*.ipa" -print
 
-          echo "=== XCARCHIVE ==="
-          find . -name "*.xcarchive" -print
+          echo "===== XCARCHIVE ====="
+          find . -type d -name "*.xcarchive" -print
 
-      - name: Récupérer l'IPA
+          echo "===== APP ====="
+          find . -type d -name "*.app" -print
+
+      - name: Télécharger le build
         if: success()
         uses: actions/upload-artifact@v4
         with:
