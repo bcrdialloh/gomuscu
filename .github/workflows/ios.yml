@@ -1,21 +1,58 @@
-[project]
-name = "gomuscu"
-version = "1.0.0"
-description = "GoMuscu"
-requires-python = ">=3.12,<3.13"
-dependencies = [
-    "flet==0.86.4",
-    "requests"
-]
+name: Build GoMuscu iOS
 
-[tool.flet]
-product = "GoMuscu"
-org = "com.gomuscu"
-bundle_id = "com.gomuscu.app"
+on:
+  workflow_dispatch:
 
-[tool.flet.ios]
-export_method = "debugging"
+jobs:
+  build:
+    runs-on: macos-15
 
-[tool.flet.flutter.pubspec.dependency_overrides]
-connectivity_plus = "7.0.0"
-device_info_plus = "12.3.0"
+    steps:
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: stable
+          cache: true
+
+      - name: Installer Flet
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet==0.86.4
+
+      - name: Vérifier les versions
+        run: |
+          python --version
+          flet --version
+          flutter --version
+          xcodebuild -version
+
+      - name: Nettoyer
+        run: |
+          rm -rf build
+          rm -rf ios/Pods
+          rm -rf ios/.symlinks
+          rm -f ios/Podfile.lock
+
+      - name: Construire GoMuscu
+        run: |
+          flet build ipa --no-rich-output
+
+      - name: Récupérer le build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoMuscu-iOS
+          path: |
+            build/**
+            **/*.xcarchive
+            **/*.ipa
+          if-no-files-found: warn
