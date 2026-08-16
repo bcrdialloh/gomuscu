@@ -8,74 +8,101 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - name: Récupérer GoMuscu
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Installer Python 3.12
+      - name: Installer Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Installer Flutter 3.44.8
+      - name: Installer Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.44.8"
           channel: stable
           cache: true
 
-      - name: Installer Flet 0.86.4
+      - name: Installer Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.86.4
 
-      - name: Vérifier environnement
+      - name: Vérifier versions
         run: |
-          echo "===== PYTHON ====="
           python --version
-
-          echo "===== FLET ====="
           flet --version
-
-          echo "===== FLUTTER ====="
           flutter --version
-
-          echo "===== XCODE ====="
           xcodebuild -version
 
-          echo "===== MACOS ====="
-          sw_vers
-
-      - name: Préparer Flutter iOS
-        run: |
-          flutter precache --ios
-
-      - name: Construire GoMuscu
+      - name: Construire le projet iOS
         run: |
           flet build ipa \
             --no-rich-output \
-            --yes \
             --swift-package-manager \
-            --build-version 1.0.0 \
-            --build-number ${{ github.run_number }}
+            --ios-export-method debugging
 
-      - name: Vérifier le résultat
-        if: always()
+      - name: Corriger device_info_plus
         run: |
-          echo "===== IPA ====="
-          find . -type f -name "*.ipa" -print
+          FILE=$(find "$HOME/.pub-cache" \
+            -path "*device_info_plus-12.4.0/ios/device_info_plus/Sources/device_info_plus/FPPDeviceInfoPlusPlugin.m" \
+            | head -1)
 
-          echo "===== XCARCHIVE ====="
-          find . -type d -name "*.xcarchive" -print
+          if [ -z "$FILE" ]; then
+            echo "ERREUR: device_info_plus 12.4.0 introuvable"
+            exit 1
+          fi
 
-          echo "===== APP ====="
-          find . -type d -name "*.app" -print
+          echo "Patch de : $FILE"
 
-      - name: Télécharger le build
-        if: success()
+          sed -i '' \
+            's/isiOSAppOnVision/isVision/g' \
+            "$FILE"
+
+          echo "Patch terminé"
+
+      - name: Vérifier le patch
+        run: |
+          FILE=$(find "$HOME/.pub-cache" \
+            -path "*device_info_plus-12.4.0/ios/device_info_plus/Sources/device_info_plus/FPPDeviceInfoPlusPlugin.m" \
+            | head -1)
+
+          if grep -q "isiOSAppOnVision" "$FILE"; then
+            echo "ERREUR: isiOSAppOnVision est toujours présent"
+            exit 1
+          fi
+
+          echo "device_info_plus corrigé"
+
+      - name: Recompiler avec Flutter
+        run: |
+          flutter clean
+          flutter pub get
+
+          flutter build ios \
+            --release \
+            --no-codesign
+
+      - name: Vérifier le build
+        run: |
+          if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
+            echo "ERREUR: Runner.app introuvable"
+            exit 1
+          fi
+
+          echo "Build iOS réussi"
+
+      - name: Créer IPA non signé
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/GoMuscu.app
+
+          cd build/ipa
+          zip -r ../GoMuscu-unsigned.ipa Payload
+
+      - name: Récupérer IPA
         uses: actions/upload-artifact@v4
         with:
-          name: GoMuscu-iOS
-          path: |
-            **/*.ipa
-            **/*.xcarchive
+          name: GoMuscu-iOS-unsigned
+          path: build/GoMuscu-unsigned.ipa
           if-no-files-found: error
