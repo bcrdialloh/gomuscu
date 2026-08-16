@@ -15,3 +15,6 @@ bundle_id = "com.gomuscu.app"
 
 [tool.flet.ios]
 export_method = "debugging"
+
+[tool.flet.flutter.pubspec.dependency_overrides]
+connectivity_plus = "7.0.0"
