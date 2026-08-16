@@ -30,30 +30,79 @@ jobs:
           xcodebuild -version
           xcode-select -p
 
-      - name: Installer Flet 0.86.4
+      - name: Installer Flet
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.86.4
           flet --version
 
-      - name: Préparer le projet iOS
+      # Flet génère le projet iOS ici
+      - name: Générer le projet iOS Flet
         run: |
-          flutter clean
-          rm -rf ios/Pods
-          rm -rf ios/Podfile.lock
-          rm -rf ios/.symlinks
-          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          flet build ipa --no-rich-output
+        continue-on-error: true
 
-      - name: Construire GoMuscu
+      # Vérifier où Flet a généré le projet Flutter
+      - name: Rechercher pubspec.yaml
+        run: |
+          echo "=== PUBSPEC TROUVÉS ==="
+          find . -name "pubspec.yaml" -not -path "./.git/*" -print
+
+      # Forcer device_info_plus 12.3.0
+      - name: Forcer device_info_plus 12.3.0
+        run: |
+          PUBSPEC=$(find . -path "*/ios/flutter/*/pubspec.yaml" -o -path "*/build/flutter/*/pubspec.yaml" | head -n 1)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "pubspec.yaml Flutter introuvable"
+            find . -name "pubspec.yaml" -not -path "./.git/*" -print
+            exit 1
+          fi
+
+          echo "Pubspec trouvé : $PUBSPEC"
+
+          python3 - "$PUBSPEC" <<'PY'
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+
+          if "dependency_overrides:" in text:
+              text += "\n  device_info_plus: 12.3.0\n"
+          else:
+              text += "\n\ndependency_overrides:\n  device_info_plus: 12.3.0\n"
+
+          path.write_text(text)
+          PY
+
+          echo "=== DEPENDENCY OVERRIDES ==="
+          tail -10 "$PUBSPEC"
+
+      - name: Installer les dépendances Flutter
+        run: |
+          cd ios
+          flutter pub get
+
+      - name: Nettoyer CocoaPods
+        run: |
+          cd ios
+          pod deintegrate || true
+          rm -rf Pods
+          rm -f Podfile.lock
+          pod install --repo-update
+
+      - name: Construire l'IPA
         run: |
           flet build ipa --no-rich-output
 
-      - name: Chercher les fichiers générés
+      - name: Rechercher les fichiers générés
         if: always()
         run: |
-          echo "=== FICHIERS IPA ==="
+          echo "=== IPA ==="
           find . -name "*.ipa" -print
-          echo "=== FICHIERS XCARCHIVE ==="
+
+          echo "=== XCARCHIVE ==="
           find . -name "*.xcarchive" -print
 
       - name: Récupérer l'IPA
