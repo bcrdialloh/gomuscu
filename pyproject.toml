@@ -15,6 +15,3 @@ bundle_id = "com.gomuscu.app"
 
 [tool.flet.ios]
 export_method = "debugging"
-
-[tool.flet.flutter.pubspec.dependencies]
-device_info_plus = "12.3.0"
